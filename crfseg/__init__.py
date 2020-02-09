@@ -1,1 +1,1 @@
-from .meanfield import MeanFieldCRF
+from .meanfield import MeanFieldCRF, RegressionCRF
