@@ -42,3 +42,7 @@ def unfold(x, window_size, fill_value=np.nan):
         output[(...,) + source_slice + tuple(shift + window_size // 2)] = x[(...,) + shifted_slice]
 
     return output
+
+
+def to_np(tensor):
+    return tensor.data.cpu().numpy()

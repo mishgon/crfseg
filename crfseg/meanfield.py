@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
 
-from .utils import unfold
+from .utils import unfold, to_np
 
 
 class MeanFieldCRF(nn.Module):
@@ -87,7 +87,7 @@ class MeanFieldCRF(nn.Module):
 
             if features is not None:
                 adaptive_filter = self._adaptive_filter(features, filter_size, self.inverse_appearance_bandwidth).to(x)
-                adaptive_filter = self._combine_filters(smoothing_filter, adaptive_filter)
+                adaptive_filter = self._make_broadcastable_to_adaptive(smoothing_filter) * adaptive_filter
                 adaptive_filter_output = self._pass_message(x, adaptive_filter, self.n_classes_to_vectorize)
                 adaptive_filter_output = self._unpad(adaptive_filter_output, filter_size)
 
@@ -104,7 +104,7 @@ class MeanFieldCRF(nn.Module):
 
         return F.log_softmax(x, dim=1) if self.return_log_proba else F.softmax(x, dim=1)
 
-    def compute_energy(self, state, unary, spatial_spacing=None):
+    def compute_energy(self, state, unary, features=None, spatial_spacing=None):
         """
         Parameters
         ----------
@@ -112,6 +112,8 @@ class MeanFieldCRF(nn.Module):
             Array of shape ``spatial`` with classes.
         unary : np.ndarray
             Array of shape ``(n_classes, *spatial)`` with negative unary potentials, e.g. logits.
+        features : np.ndarray
+            Array of shape ``(n_channels, *spatial)`` with with features for creating a bilateral kernel.
         spatial_spacing : None, or sequence of ints
 
         Returns
@@ -126,13 +128,19 @@ class MeanFieldCRF(nn.Module):
             spatial_spacing = len(state.shape) * [1]
         spatial_spacing = torch.tensor(spatial_spacing)[None]
 
-        unfolded_compatibility = self._compatibility_function(state[(..., *len(filter_size) * [None])],
-                                                              unfold(state, filter_size, fill_value=np.nan))
-        unfolded_compatibility = np.nan_to_num(unfolded_compatibility)
+        # Compute kernel
+        smoothing_filter = to_np(self._smoothing_filter(filter_size, self.inverse_smoothing_bandwidth, spatial_spacing))
+        kernel = to_np(self.smoothing_weight) * smoothing_filter
+        if features is not None:
+            adaptive_filter = to_np(self._adaptive_filter(features[None], filter_size, self.inverse_appearance_bandwidth))
+            adaptive_filter = self._make_broadcastable_to_adaptive(smoothing_filter) * adaptive_filter
+            kernel = self._make_broadcastable_to_adaptive(kernel) + to_np(self.appearance_weight) * adaptive_filter
 
-        filter_ = (self.smoothing_weight * self._smoothing_filter(filter_size, self.inverse_smoothing_bandwidth,
-                                                                  spatial_spacing)).data.cpu().numpy()
-        pairwise_term = np.sum(np.einsum(f'...{ij}, ...{ij}', unfolded_compatibility, filter_))
+        # Compute compatibilities
+        compatibilities = np.nan_to_num(self._compatibility_function(state[(..., *len(filter_size) * [None])],
+                                                                     unfold(state, filter_size, fill_value=np.nan)))
+
+        pairwise_term = np.sum(np.einsum(f'...{ij}, ...{ij}', compatibilities, kernel))
 
         return np.sum(np.take_along_axis(unary, state[None], 0)) + pairwise_term
 
@@ -178,7 +186,7 @@ class MeanFieldCRF(nn.Module):
         """
         Parameters
         ----------
-        features : torch.tensor
+        features : torch.tensor or np.ndarray
             Tensor of shape ``(batch_size, n_channels, *spatial)``.
         filter_size : np.ndarray with ``len(spatial)`` ints
         inverse_bandwidth : torch.nn.parameter.Parameter containing 1 or ``n_channels`` floats
@@ -188,6 +196,9 @@ class MeanFieldCRF(nn.Module):
         filters : torch.tensor
             Tensor of shape ``(batch_size, *spatial, *filter_size)``. Contains trash (not Nans) in the positions where filters' values are not defined.
         """
+        if isinstance(features, np.ndarray):
+            features = torch.from_numpy(features).to(inverse_bandwidth)
+
         diffs = features[(..., *len(filter_size) * [None])] - unfold(features, filter_size, fill_value=0)
         scaled_diffs = diffs * inverse_bandwidth.view(-1, *(len(features.shape[2:]) + len(filter_size)) * [1])
         filters = torch.exp(-torch.sum(scaled_diffs ** 2 / 2, dim=1))
@@ -201,22 +212,20 @@ class MeanFieldCRF(nn.Module):
         return filters
 
     @staticmethod
-    def _combine_filters(smoothing_filter, adaptive_filter):
+    def _make_broadcastable_to_adaptive(smoothing_filter):
         """
         Parameters
         ----------
-        smoothing_filter : : torch.tensor
+        smoothing_filter : : torch.tensor or np.ndarray
             Tensor of shape ``(batch_size, *filter_size)``
-        adaptive_filter : torch.tensor
-            Tensor of shape ``(batch_size, *spatial, *filter_size)``.
 
         Returns
         -------
-        combined_filter : torch.tensor
+        smoothing_filter : torch.tensor or np.ndarray
             Tensor of shape ``(batch_size, *spatial, *filter_size)``.
         """
         n_spatial = len(smoothing_filter.shape) - 1  # len(filter_size) == len(spatial)
-        return smoothing_filter[(slice(None), *n_spatial * [None])] * adaptive_filter
+        return smoothing_filter[(slice(None), *n_spatial * [None])]
 
     @staticmethod
     def _convolve_classwisely(x, filter_):
