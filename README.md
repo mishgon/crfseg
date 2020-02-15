@@ -19,7 +19,7 @@ import torch
 from crfseg import MeanFieldCRF
 
 model = nn.Sequential(
-    nn.Identity(),  # your foken awesome NN
+    nn.Identity(),  # your NN
     MeanFieldCRF()
 )
 

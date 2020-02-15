@@ -41,12 +41,12 @@ class MeanFieldCRF(nn.Module):
         self.return_log_proba = return_log_proba
         self.requires_grad = requires_grad
 
-        self._add_param('smoothing_weight', smoothing_weight)
-        self._add_param('appearance_weight', appearance_weight)
-        self._add_param('inverse_smoothing_bandwidth', 1 / np.asarray(smoothing_bandwidth))
-        self._add_param('inverse_appearance_bandwidth', 1 / np.asarray(appearance_bandwidth))
+        self._set_param('smoothing_weight', smoothing_weight)
+        self._set_param('appearance_weight', appearance_weight)
+        self._set_param('inverse_smoothing_bandwidth', 1 / np.asarray(smoothing_bandwidth))
+        self._set_param('inverse_appearance_bandwidth', 1 / np.asarray(appearance_bandwidth))
 
-    def _add_param(self, name, init_value):
+    def _set_param(self, name, init_value):
         setattr(self, name, Parameter(torch.tensor(init_value, dtype=torch.float, requires_grad=self.requires_grad)))
 
     def forward(self, x, features=None, spatial_spacings=None):
@@ -327,7 +327,7 @@ class RegressionCRF(MeanFieldCRF):
     """
     def __init__(self, compatibility_bandwidth=1, **kwargs):
         super().__init__(**kwargs)
-        self._add_param('inverse_compatibility_bandwidth', 1 / np.asarray(compatibility_bandwidth))
+        self._set_param('inverse_compatibility_bandwidth', 1 / np.asarray(compatibility_bandwidth))
 
     def _compatibility_function(self, label1, label2):
         if isinstance(label1, torch.Tensor) and isinstance(label2, torch.Tensor):
