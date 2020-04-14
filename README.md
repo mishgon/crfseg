@@ -13,17 +13,17 @@ Gaussian Edge Potentials](https://arxiv.org/pdf/1210.5644.pdf)
 
 ## Usage
 Can be easily used as differentiable (and moreover learnable) postprocessing layer of your NN for segmentation.
-It is adaptive to a number of input's spatial dimensions.
 ```angular2html
 import torch
-from crfseg import MeanFieldCRF
+import torch.nn as nn
+from crfseg import CRF
 
 model = nn.Sequential(
     nn.Identity(),  # your NN
-    MeanFieldCRF()
+    CRF(n_spatial_dims=2)
 )
 
 batch_size, n_channels, spatial = 10, 1, (100, 100)
-x = torch.zeros((batch_size, n_channels, *spatial))
+x = torch.zeros(batch_size, n_channels, *spatial)
 log_proba = model(x)
 ```
