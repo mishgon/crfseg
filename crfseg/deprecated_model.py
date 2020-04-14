@@ -10,7 +10,6 @@ from .utils import unfold, to_np
 class MeanFieldCRF(nn.Module):
     """
     Class for learning and inference in conditional random field model using mean field approximation and convolutional approximation in pairwise potentials term.
-
     Parameters
     ----------
     filter_size : int or sequence of ints
@@ -59,7 +58,6 @@ class MeanFieldCRF(nn.Module):
             Tensor of shape ``(batch_size, n_channels, *spatial)`` with features for creating a bilateral kernel.
         spatial_spacings : torch.tensor or None
             Tensor of shape ``(batch_size, len(spatial))`` with spatial spacings of tensors in batch ``x``. None is equivalent to all ones. Used to adapt spatial gaussian filters to different inputs' resolutions.
-
         Returns
         -------
         output : torch.tensor
@@ -115,7 +113,6 @@ class MeanFieldCRF(nn.Module):
         features : np.ndarray
             Array of shape ``(n_channels, *spatial)`` with with features for creating a bilateral kernel.
         spatial_spacing : None, or sequence of ints
-
         Returns
         -------
         energy : float
@@ -164,7 +161,6 @@ class MeanFieldCRF(nn.Module):
         filter_size : sequence of ints
         inverse_bandwidth : torch.nn.parameter.Parameter containing 1 or ``len(filter_size)`` floats
         spatial_spacings : torch.tensor of shape ``(batch_size, len(filter_size))``.
-
         Returns
         -------
         filter_ : torch.tensor
@@ -190,7 +186,6 @@ class MeanFieldCRF(nn.Module):
             Tensor of shape ``(batch_size, n_channels, *spatial)``.
         filter_size : np.ndarray with ``len(spatial)`` ints
         inverse_bandwidth : torch.nn.parameter.Parameter containing 1 or ``n_channels`` floats
-
         Returns
         -------
         filters : torch.tensor
@@ -218,7 +213,6 @@ class MeanFieldCRF(nn.Module):
         ----------
         smoothing_filter : : torch.tensor or np.ndarray
             Tensor of shape ``(batch_size, *filter_size)``
-
         Returns
         -------
         smoothing_filter : torch.tensor or np.ndarray
@@ -236,7 +230,6 @@ class MeanFieldCRF(nn.Module):
             Tensor of shape ``(batch_size, n_classes, *spatial)``.
         filter_ : torch.tensor
             Tensor of shape ``(batch_size, *filter_size)``.
-
         Returns
         -------
         output : torch.tensor
@@ -259,7 +252,6 @@ class MeanFieldCRF(nn.Module):
             Tensor of shape ``(batch_size, *spatial, *filter_size)``.
         n_classes_to_vectorize : int or None
             The number of classes which are processed in parallel. Default is None, which means all classes. Large ``n_classes_to_vectorize`` leads to faster but more storage-consuming computations.
-
         Returns
         -------
         output : torch.tensor
@@ -285,7 +277,6 @@ class MeanFieldCRF(nn.Module):
         Parameters
         ----------
         x : torch.tensor of shape ``(batch_size, n_classes, *spatial)``.
-
         Returns
         -------
         output : torch.tensor of shape ``(batch_size, n_classes, *spatial)``.
@@ -298,12 +289,10 @@ class MeanFieldCRF(nn.Module):
     def _compatibility_function(label1, label2):
         """
         Inputs must be broadcastable.
-
         Parameters
         ----------
         label1 : torch.tensor or np.ndarray
         label2 : torch.tensor or np.ndarray
-
         Returns
         -------
         compatibility : float
