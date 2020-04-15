@@ -48,14 +48,12 @@ class CRF(nn.Module):
     def _set_param(self, name, init_value):
         setattr(self, name, nn.Parameter(torch.tensor(init_value, dtype=torch.float, requires_grad=self.requires_grad)))
 
-    def forward(self, x, features=None, spatial_spacings=None):
+    def forward(self, x, spatial_spacings=None):
         """
         Parameters
         ----------
         x : torch.tensor
             Tensor of shape ``(batch_size, n_classes, *spatial)`` with negative unary potentials, e.g. logits.
-        features : torch.tensor
-            Tensor of shape ``(batch_size, n_channels, *spatial)`` with features for creating a bilateral kernel.
         spatial_spacings : torch.tensor or None
             Tensor of shape ``(batch_size, len(spatial))`` with spatial spacings of tensors in batch ``x``.
             None is equivalent to all ones. Used to adapt spatial gaussian filters to different inputs' resolutions.
@@ -127,7 +125,7 @@ class CRF(nn.Module):
             shape_before_flatten = x.shape[:-1]
             x = x.flatten(0, -2).unsqueeze(1)
 
-            # 1d gaussian filter
+            # 1d gaussian filtering
             kernel = CRF.create_gaussian_kernel1d(inv_theta[i], spatial_spacing[i], filter_size[i]).view(1, 1, -1).to(x)
             x = F.conv1d(x, kernel, padding=(filter_size[i] // 2,))
 
