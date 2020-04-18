@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from tqdm import tqdm
+
 
 class CRF(nn.Module):
     """
@@ -48,15 +50,17 @@ class CRF(nn.Module):
     def _set_param(self, name, init_value):
         setattr(self, name, nn.Parameter(torch.tensor(init_value, dtype=torch.float, requires_grad=self.requires_grad)))
 
-    def forward(self, x, spatial_spacings=None):
+    def forward(self, x, spatial_spacings=None, use_tqdm=False):
         """
         Parameters
         ----------
         x : torch.tensor
             Tensor of shape ``(batch_size, n_classes, *spatial)`` with negative unary potentials, e.g. logits.
-        spatial_spacings : torch.tensor or None
-            Tensor of shape ``(batch_size, len(spatial))`` with spatial spacings of tensors in batch ``x``.
+        spatial_spacings : array of floats or None
+            Array of shape ``(batch_size, len(spatial))`` with spatial spacings of tensors in batch ``x``.
             None is equivalent to all ones. Used to adapt spatial gaussian filters to different inputs' resolutions.
+        use_tqdm : bool
+            Whether to display the iterations tqdm-bar.
 
         Returns
         -------
@@ -70,7 +74,8 @@ class CRF(nn.Module):
 
         negative_unary = x.clone()
 
-        for i in range(self.n_iter):
+        wrapper = tqdm if use_tqdm else lambda x: x
+        for i in wrapper(range(self.n_iter)):
             # normalizing
             x = F.softmax(x, dim=1)
 
