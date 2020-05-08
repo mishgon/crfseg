@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from itertools import product
+from tqdm import tqdm
 
 
 def unfold(x, window_size, fill_value=np.nan):
@@ -46,3 +47,7 @@ def unfold(x, window_size, fill_value=np.nan):
 
 def to_np(tensor):
     return tensor.data.cpu().numpy()
+
+
+def tqdm_if(obj, condition):
+    return tqdm(obj) if condition else obj

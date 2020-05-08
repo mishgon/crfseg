@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from tqdm import tqdm
+from .utils import tqdm_if
 
 
 class CRF(nn.Module):
@@ -14,34 +14,31 @@ class CRF(nn.Module):
 
     Parameters
     ----------
+    n_spatial_dims : int
+        Number of spatial dimensions of input tensors.
     filter_size : int or sequence of ints
         Size of the gaussian filters in message passing.
-        If it is a sequence its length must be equal to the number of spatial dimensions of input tensors.
+        If it is a sequence its length must be equal to ``n_spatial_dims``.
     n_iter : int
         Number of iterations in mean field approximation.
-    n_classes_to_vectorize : int or None
-        The number of classes which are processed in vectorized manner. Default is None, which means all classes.
-        Large ``n_classes_to_vectorize`` leads to faster but more storage-consuming computations.
     requires_grad : bool
         Whether or not to train CRF's parameters.
-    return_log_proba : bool
-        Whether to return log-probabilities (which is more computationally stable if then the nn.NLLLoss is used),
-        or probabilities.
+    returns : str
+        Can be 'logits', 'proba', 'log-proba'.
     smoothness_weight : float
         Initial weight of smoothness kernel.
     smoothness_theta : float or sequence of floats
         Initial bandwidths for each spatial feature in the gaussian smoothness kernel.
-        If it is a sequence its length must be equal to the number of spatial dimensions of input tensors.
+        If it is a sequence its length must be equal to ``n_spatial_dims``.
     """
 
-    def __init__(self, n_spatial_dims, filter_size=11, n_iter=5, n_classes_to_vectorize=None, requires_grad=True,
-                 return_log_proba=True, smoothness_weight=1, smoothness_theta=1):
+    def __init__(self, n_spatial_dims, filter_size=11, n_iter=5, requires_grad=True,
+                 returns='logits', smoothness_weight=1, smoothness_theta=1):
         super().__init__()
         self.n_spatial_dims = n_spatial_dims
         self.n_iter = n_iter
         self.filter_size = np.broadcast_to(filter_size, n_spatial_dims)
-        self.n_classes_to_vectorize = n_classes_to_vectorize
-        self.return_log_proba = return_log_proba
+        self.returns = returns
         self.requires_grad = requires_grad
 
         self._set_param('smoothness_weight', smoothness_weight)
@@ -50,32 +47,37 @@ class CRF(nn.Module):
     def _set_param(self, name, init_value):
         setattr(self, name, nn.Parameter(torch.tensor(init_value, dtype=torch.float, requires_grad=self.requires_grad)))
 
-    def forward(self, x, spatial_spacings=None, use_tqdm=False):
+    def forward(self, x, spatial_spacings=None, display_tqdm=False):
         """
         Parameters
         ----------
         x : torch.tensor
-            Tensor of shape ``(batch_size, n_classes, *spatial)`` with negative unary potentials, e.g. logits.
+            Tensor of shape ``(batch_size, n_classes, *spatial)`` with negative unary potentials, e.g. the CNN's output.
         spatial_spacings : array of floats or None
             Array of shape ``(batch_size, len(spatial))`` with spatial spacings of tensors in batch ``x``.
             None is equivalent to all ones. Used to adapt spatial gaussian filters to different inputs' resolutions.
-        use_tqdm : bool
-            Whether to display the iterations tqdm-bar.
+        display_tqdm : bool
+            Whether to display the iterations using tqdm-bar.
 
         Returns
         -------
         output : torch.tensor
-            Tensor of shape ``(batch_size, n_classes, *spatial)`` with (log-)probabilities of assignment to each class.
+            Tensor of shape ``(batch_size, n_classes, *spatial)``
+            with logits or (log-)probabilities of assignment to each class.
         """
         batch_size, n_classes, *spatial = x.shape
         assert len(spatial) == self.n_spatial_dims
+
+        # binary segmentation case
+        if n_classes == 1:
+            x = torch.cat([x, torch.zeros(x.shape)], dim=1)
+
         if spatial_spacings is None:
             spatial_spacings = np.ones((batch_size, self.n_spatial_dims))
 
         negative_unary = x.clone()
 
-        wrapper = tqdm if use_tqdm else lambda x: x
-        for i in wrapper(range(self.n_iter)):
+        for i in tqdm_if(range(self.n_iter), display_tqdm):
             # normalizing
             x = F.softmax(x, dim=1)
 
@@ -88,7 +90,20 @@ class CRF(nn.Module):
             # adding unary potentials
             x = negative_unary - x
 
-        return F.log_softmax(x, dim=1) if self.return_log_proba else F.softmax(x, dim=1)
+        if self.returns == 'logits':
+            output = x
+        elif self.returns == 'proba':
+            output = F.softmax(x, dim=1)
+        elif self.returns == 'log-proba':
+            output = F.log_softmax(x, dim=1)
+        else:
+            raise ValueError("Attribute ``returns`` must be 'logits', 'proba' or 'log-proba'.")
+
+        if n_classes == 1:
+            output = output[:, 0] - output[:, 1] if self.returns == 'logits' else output[:, 0]
+            output.unsqueeze_(1)
+
+        return output
 
     def _smoothing_filter(self, x, spatial_spacings):
         """
