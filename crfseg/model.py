@@ -70,7 +70,7 @@ class CRF(nn.Module):
 
         # binary segmentation case
         if n_classes == 1:
-            x = torch.cat([x, torch.zeros(x.shape)], dim=1)
+            x = torch.cat([x, torch.zeros(x.shape).to(x)], dim=1)
 
         if spatial_spacings is None:
             spatial_spacings = np.ones((batch_size, self.n_spatial_dims))
