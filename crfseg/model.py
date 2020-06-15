@@ -119,26 +119,30 @@ class CRF(nn.Module):
         output : torch.tensor
             Tensor of shape ``(batch_size, n_classes, *spatial)``.
         """
-        return torch.stack([self._gaussian_filter(x[i], self.inv_smoothness_theta, spatial_spacings[i], self.filter_size)
-                            for i in range(x.shape[0])])
+        return torch.stack([self._single_smoothing_filter(x[i], spatial_spacings[i]) for i in range(x.shape[0])])
 
     @staticmethod
-    def _gaussian_filter(x, inv_theta, spatial_spacing, filter_size):
+    def _pad(x, filter_size):
+        padding = []
+        for fs in filter_size:
+            padding += 2 * [fs // 2]
+
+        return F.pad(x, list(reversed(padding)))  # F.pad pads from the end
+
+    def _single_smoothing_filter(self, x, spatial_spacing):
         """
         Parameters
         ----------
         x : torch.tensor
             Tensor of shape ``(n, *spatial)``.
-        inv_theta : torch.tensor
-            Tensor of shape ``(len(spatial),)``
         spatial_spacing : sequence of len(spatial) floats
-        filter_size : sequence of len(spatial) ints
 
         Returns
         -------
         output : torch.tensor
             Tensor of shape ``(n, *spatial)``.
         """
+        x = self._pad(x, self.filter_size)
         for i, dim in enumerate(range(1, x.ndim)):
             # reshape to (-1, 1, x.shape[dim])
             x = x.transpose(dim, -1)
@@ -146,8 +150,9 @@ class CRF(nn.Module):
             x = x.flatten(0, -2).unsqueeze(1)
 
             # 1d gaussian filtering
-            kernel = CRF.create_gaussian_kernel1d(inv_theta[i], spatial_spacing[i], filter_size[i]).view(1, 1, -1).to(x)
-            x = F.conv1d(x, kernel, padding=(filter_size[i] // 2,))
+            kernel = CRF._create_gaussian_kernel1d(self.inv_smoothness_theta[i], spatial_spacing[i],
+                                                   self.filter_size[i]).view(1, 1, -1).to(x)
+            x = F.conv1d(x, kernel)
 
             # reshape back to (n, *spatial)
             x = x.squeeze(1).view(*shape_before_flatten, x.shape[-1]).transpose(-1, dim)
@@ -155,7 +160,7 @@ class CRF(nn.Module):
         return x
 
     @staticmethod
-    def create_gaussian_kernel1d(inverse_theta, spacing, filter_size):
+    def _create_gaussian_kernel1d(inverse_theta, spacing, filter_size):
         """
         Parameters
         ----------
