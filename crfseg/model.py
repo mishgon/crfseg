@@ -46,7 +46,7 @@ class CRF(nn.Module):
     def _set_param(self, name, init_value):
         setattr(self, name, nn.Parameter(torch.tensor(init_value, dtype=torch.float, requires_grad=self.requires_grad)))
 
-    def forward(self, x, spatial_spacings=None, tqdm=False):
+    def forward(self, x, spatial_spacings=None, verbose=False):
         """
         Parameters
         ----------
@@ -55,7 +55,7 @@ class CRF(nn.Module):
         spatial_spacings : array of floats or None
             Array of shape ``(batch_size, len(spatial))`` with spatial spacings of tensors in batch ``x``.
             None is equivalent to all ones. Used to adapt spatial gaussian filters to different inputs' resolutions.
-        tqdm : bool
+        verbose : bool
             Whether to display the iterations using tqdm-bar.
 
         Returns
@@ -76,7 +76,7 @@ class CRF(nn.Module):
 
         negative_unary = x.clone()
 
-        for i in tqdm(range(self.n_iter), disable=not tqdm):
+        for i in tqdm(range(self.n_iter), disable=not verbose):
             # normalizing
             x = F.softmax(x, dim=1)
 
