@@ -1,10 +1,9 @@
 import numpy as np
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from .utils import tqdm_if
 
 
 class CRF(nn.Module):
@@ -47,7 +46,7 @@ class CRF(nn.Module):
     def _set_param(self, name, init_value):
         setattr(self, name, nn.Parameter(torch.tensor(init_value, dtype=torch.float, requires_grad=self.requires_grad)))
 
-    def forward(self, x, spatial_spacings=None, display_tqdm=False):
+    def forward(self, x, spatial_spacings=None, tqdm=False):
         """
         Parameters
         ----------
@@ -56,7 +55,7 @@ class CRF(nn.Module):
         spatial_spacings : array of floats or None
             Array of shape ``(batch_size, len(spatial))`` with spatial spacings of tensors in batch ``x``.
             None is equivalent to all ones. Used to adapt spatial gaussian filters to different inputs' resolutions.
-        display_tqdm : bool
+        tqdm : bool
             Whether to display the iterations using tqdm-bar.
 
         Returns
@@ -77,7 +76,7 @@ class CRF(nn.Module):
 
         negative_unary = x.clone()
 
-        for i in tqdm_if(range(self.n_iter), display_tqdm):
+        for i in tqdm(range(self.n_iter), disable=not tqdm):
             # normalizing
             x = F.softmax(x, dim=1)
 
@@ -150,7 +149,7 @@ class CRF(nn.Module):
             x = x.flatten(0, -2).unsqueeze(1)
 
             # 1d gaussian filtering
-            kernel = CRF._create_gaussian_kernel1d(self.inv_smoothness_theta[i], spatial_spacing[i],
+            kernel = self._create_gaussian_kernel1d(self.inv_smoothness_theta[i], spatial_spacing[i],
                                                    self.filter_size[i]).view(1, 1, -1).to(x)
             x = F.conv1d(x, kernel)
 
